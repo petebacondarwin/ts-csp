@@ -1,21 +1,18 @@
 import {NoopOperation, StopOperation, SleepOperation} from "./operations";
+import {Scheduler} from "./scheduler";
 
-export type ScheduleFn = (next: Function) => void;
-
-export class Routine {
+export class Routine<T = unknown, TReturn = any, TNext = unknown> {
   state: 'RUNNING' | 'PAUSED' | 'COMPLETE' = 'RUNNING';
-  private generator = this.genFn(...this.args);
 
-  constructor(private genFn: (...args: any) => Generator, private args: any[], private scheduler: ScheduleFn) {
+  constructor(private generator: Generator<T, TReturn, TNext>, private scheduler: Scheduler) {
     this.scheduleNext();
   }
 
   private scheduleNext(result?: any): void {
-    this.scheduler(() => this.next(result));
+    this.scheduler.schedule(() => this.next(result));
   }
 
   private next(result?: any) {
-    if (this.state === 'PAUSED' || this.state === 'COMPLETE') return;
     this.handleStep(this.generator.next(result));
   }
 
@@ -47,9 +44,4 @@ export class Routine {
       this.scheduleNext(value);
     }
   }
-}
-
-export function go(genFn: (...args: any) => Generator, ...args: any[]): Routine {
-  const syncScheduler: ScheduleFn = fn => fn();
-  return new Routine(genFn, args, syncScheduler);
 }

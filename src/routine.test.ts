@@ -1,43 +1,73 @@
 /**
  * @jest-environment node
  */
-import {go, Routine} from './go';
+import {Routine} from './routine';
 import {noop, Operation, sleep, stop} from './operations';
+import {RecursiveScheduler} from './scheduler';
 
-describe('go', () => {
-  it('should return a routine in a running state', () => {
+describe('Routine', () => {
+  it('should start in a running state', () => {
     jest.useFakeTimers();
-    const routine = go(function* a() {yield sleep(1000);});
+    function* generatorFn() {
+      yield sleep(1000);
+    }
+    const routine = new Routine(generatorFn(), new RecursiveScheduler());
     expect(routine.state).toEqual('RUNNING');
   });
 
-  it('should put the routine in the COMPLETE state when the generator completes', () => {
-    const routine = go(function* a() {yield noop();});
+  it('should put the routine in the COMPLETE state when the generator completes implicitly', () => {
+    function* genFn() {
+      yield noop();
+    }
+    const routine = new Routine(genFn(), new RecursiveScheduler());
+    expect(routine.state).toEqual('COMPLETE');
+  });
+
+  it('should put the routine in the COMPLETE state when the generator completes explicitly', () => {
+    function* genFn() {
+      return 100;
+    }
+    const routine = new Routine(genFn(), new RecursiveScheduler());
     expect(routine.state).toEqual('COMPLETE');
   });
 
   it('should put the routine in the PAUSED state when the generator yields a STOP', () => {
-    const routine = go(function* a() {yield stop();});
+    function* genFn() {
+      yield stop();
+    }
+    const routine = new Routine(genFn(), new RecursiveScheduler());
     expect(routine.state).toEqual('PAUSED');
   });
 
   it('should stop iterating over the generator when the the routine in the PAUSED state', () => {
     let here = false;
-    const routine = go(function* a() {yield stop(); here = true; yield noop();});
+    function* genFn() {
+      yield stop();
+      here = true;
+      yield noop();
+    }
+    const routine = new Routine(genFn(), new RecursiveScheduler());
     expect(routine.state).toEqual('PAUSED');
     expect(here).toBe(false);
   });
 
   it('should pass a value that is not a known operation back to the generator', () => {
     let result: any;
-    go(function* a() {result = yield 'NON_OPERATION';});
+    function* genFn() {
+      result = yield 'NON_OPERATION';
+    }
+    new Routine(genFn(), new RecursiveScheduler());
     expect(result).toEqual('NON_OPERATION');
   });
 
   it('should resolve a timeout', () => {
     jest.useFakeTimers();
     let here = false;
-    const routine = go(function* a() {yield sleep(1000); here = true;});
+    function* genFn() {
+      yield sleep(1000);
+      here = true;
+    }
+    const routine = new Routine(genFn(), new RecursiveScheduler());
     expect(routine.state).toEqual('RUNNING');
     expect(setTimeout).toHaveBeenCalledTimes(1);
     expect(setTimeout).toHaveBeenCalledWith(expect.any(Function), 1000);
@@ -53,11 +83,11 @@ describe('go', () => {
     const promise2 = new Promise<Operation>(resolve => resolve2 = resolve);
 
     let result: any;
-
-    const routine = go(function* a() {
+    function* genFn() {
       result = yield promise1;
       yield promise2;
-    });
+    }
+    const routine = new Routine(genFn(), new RecursiveScheduler());
 
     expect(routine.state).toEqual('RUNNING');
     expect(result).toBeUndefined();
@@ -84,7 +114,7 @@ describe('go', () => {
     let resolveP2: (value: Operation) => void;
     const p2 = new Promise<Operation>(resolve => resolveP2 = resolve);
 
-    routine = go(function* a() {
+    function* genFn() {
       try {
         log('1 start routine');
         yield p1;
@@ -95,9 +125,10 @@ describe('go', () => {
         log('should not get here');
       }
       log('should not get here');
-    });
+    }
+    routine = new Routine(genFn(), new RecursiveScheduler());
 
-    log('2 after go()');
+    log('2 after new Routine()');
 
     log('3 before rejecting');
     rejectP1('ERROR');
@@ -112,7 +143,7 @@ describe('go', () => {
 
     expect(logs).toEqual([
       '1 start routine : undefined',
-      '2 after go() : RUNNING',
+      '2 after new Routine() : RUNNING',
       '3 before rejecting : RUNNING',
       '4 after rejecting : RUNNING',
       '5 start routine catch (ERROR) : RUNNING',
