@@ -2,8 +2,9 @@
  * @jest-environment node
  */
 import {Routine} from './routine';
-import {noop, Operation, sleep, stop} from './operations';
+import {noop, Operation, put, sleep, stop, take} from './operations';
 import {RecursiveScheduler} from './scheduler';
+import {Channel} from './channel';
 
 describe('Routine', () => {
   it('should start in a running state', () => {
@@ -102,7 +103,6 @@ describe('Routine', () => {
     expect(routine.state).toEqual('PAUSED');
   });
 
-
   it('should unwrap rejected promises', async () => {
     const logs: string[] = [];
     let routine: Routine;
@@ -151,5 +151,29 @@ describe('Routine', () => {
       '7 after resolving : RUNNING',
       '8 end : PAUSED',
     ]);
+  });
+
+  it('should synchonize channels via puts and takes', async () => {
+    const log: string[] = [];
+    const ch = new Channel<string>();
+
+    function* readerFn() {
+      while(true) {
+        log.push(yield take(ch));
+      }
+    }
+    const readerRoutine = new Routine(readerFn(), new RecursiveScheduler());
+
+    function* writerFn() {
+      yield put(ch, 'item 1');
+      yield put(ch, 'item 2');
+    }
+    const writerRoutine = new Routine(writerFn(), new RecursiveScheduler());
+
+    await writerRoutine.completed;
+    expect(writerRoutine.state).toEqual('COMPLETE');
+    // The reader routine never completes
+    expect(readerRoutine.state).toEqual('RUNNING');
+    expect(log).toEqual(['item 1', 'item 2']);
   });
 });

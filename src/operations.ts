@@ -1,3 +1,5 @@
+import {Channel} from "./channel";
+
 export type Operation = NoopOperation | StopOperation | SleepOperation;
 
 export class NoopOperation {}
@@ -15,4 +17,18 @@ export class SleepOperation {
 }
 export function sleep(time: number): SleepOperation {
   return new SleepOperation(time);
+}
+
+export class PutOperation<T> {
+  constructor(readonly ch: Channel<T>, readonly value: T) {}
+}
+export function put<T>(ch: Channel<T>, value: T): PutOperation<T> {
+  return new PutOperation(ch, value);
+}
+
+export class TakeOperation<T> {
+  constructor(readonly ch: Channel<T>) {}
+}
+export function take<T>(ch: Channel<T>): TakeOperation<T> {
+  return new TakeOperation(ch);
 }
